@@ -1,0 +1,17 @@
+# Next.js
+frontend/.next/
+frontend/node_modules/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+
+# Stitch Design Folders
+stitch_minimalist_desk_essentials*/
+
+# OS Files
+.DS_Store
+Thumbs.db

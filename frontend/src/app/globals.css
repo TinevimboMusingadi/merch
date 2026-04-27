@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #7a5825;
+  --color-primary-container: #b68e56;
+  --color-secondary: #5f5e59;
+  --color-background: #F4F1EA;
+  --color-on-surface: #1b1b1b;
+  --color-surface: #f9f9f9;
+  --color-outline: #817568;
+  
+  --font-display: var(--font-noto-serif);
+  --font-headline: var(--font-noto-serif);
+  --font-body: var(--font-manrope);
+  --font-label: var(--font-manrope);
+
+  --spacing-gutter: 24px;
+  --spacing-container-max: 1280px;
+  --spacing-section-gap: 120px;
+  --spacing-stack-md: 24px;
+  --spacing-stack-sm: 12px;
+  --spacing-stack-lg: 48px;
+
+  --radius-sm: 0.125rem;
+  --radius-DEFAULT: 0.125rem;
+  --radius-lg: 0.25rem;
+  --radius-xl: 0.5rem;
+}
+
+:root {
+  --background: #F4F1EA;
+  --foreground: #1b1b1b;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-manrope), sans-serif;
+}
+
+h1, h2, h3, h4, .font-serif {
+  font-family: var(--font-noto-serif), serif;
+}
+
+/* Custom Utilities */
+@layer utilities {
+  .text-label-caps {
+    font-size: 12px;
+    line-height: 1.2;
+    letter-spacing: 0.1em;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+}
