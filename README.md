@@ -66,7 +66,6 @@ You must also have a **Paynow Integration ID** and **Integration Key** from the 
 1. Clone the repository.
 2. Setup Frontend:
    ```bash
-   cd frontend
    npm install
    ```
 3. Setup Backend:
@@ -75,10 +74,10 @@ You must also have a **Paynow Integration ID** and **Integration Key** from the 
    ```
 
 ### Running Locally
-1. Start the Next.js dev server: `cd frontend && npm run dev`
+1. Start the Next.js dev server: `npm run dev`
 2. Start the Python server: `uvicorn api.index:app --reload --port 8000`
 
 ## Deployment
 This project is optimized for deployment on **Vercel**. 
 - The `api/` directory contains Python Serverless Functions.
-- The `frontend/` directory contains the Next.js application.
+- Next.js is served from the root.

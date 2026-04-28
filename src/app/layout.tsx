@@ -19,6 +19,7 @@ export const metadata: Metadata = {
   description: "Curated artifacts for focused workspaces. Tactile excellence meets minimal expression.",
 };
 
+import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
 
 export default function RootLayout({
@@ -32,9 +33,11 @@ export default function RootLayout({
       className={`${notoSerif.variable} ${manrope.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <CartProvider>
-          {children}
-        </CartProvider>
+        <AuthProvider>
+          <CartProvider>
+            {children}
+          </CartProvider>
+        </AuthProvider>
       </body>
     </html>
   );
