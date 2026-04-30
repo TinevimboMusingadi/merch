@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from api import models, database
+import models, database
 
 def seed_db():
     db = next(database.get_db())

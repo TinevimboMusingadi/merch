@@ -9,6 +9,7 @@ __pycache__/
 *$py.class
 venv/
 .env
+web
 
 # Stitch Design Folders
 stitch_minimalist_desk_essentials*/

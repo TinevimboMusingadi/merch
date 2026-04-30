@@ -52,22 +52,32 @@ class Token(BaseModel):
     access_token: str
     token_type: str
 
-class ProductResponse(BaseModel):
-    id: int
+class ProductCreate(BaseModel):
     title: str
     description: str
     price: float
     image_url: str
     category: str
     tag: Optional[str] = None
-    class Config:
-        from_attributes = True
+
+class ProductUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    price: Optional[float] = None
+    image_url: Optional[str] = None
+    category: Optional[str] = None
+    tag: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class OrderItem(BaseModel):
+    product_id: int
+    quantity: int
 
 class PaymentRequest(BaseModel):
     reference: str
     auth_email: str
-    items: list[dict]
-    phone: str = None
+    items: List[OrderItem]
+    phone: Optional[str] = None
     method: str = "ecocash"
 
 # Helpers
@@ -130,6 +140,28 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db:
 def get_products(db: Session = Depends(database.get_db)):
     return db.query(models.Product).filter(models.Product.is_active == True).all()
 
+@app.post("/api/products", response_model=ProductResponse)
+def create_product(product: ProductCreate, db: Session = Depends(database.get_db)):
+    new_product = models.Product(**product.dict())
+    db.add(new_product)
+    db.commit()
+    db.refresh(new_product)
+    return new_product
+
+@app.patch("/api/products/{product_id}", response_model=ProductResponse)
+def update_product(product_id: int, product_update: ProductUpdate, db: Session = Depends(database.get_db)):
+    db_product = db.query(models.Product).filter(models.Product.id == product_id).first()
+    if not db_product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    update_data = product_update.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_product, key, value)
+    
+    db.commit()
+    db.refresh(db_product)
+    return db_product
+
 @app.get("/api/me/orders")
 def get_my_orders(current_user: models.User = Depends(get_current_user), db: Session = Depends(database.get_db)):
     return db.query(models.Order).filter(models.Order.username == current_user.username).all()
@@ -140,8 +172,16 @@ def initiate_payment(req: PaymentRequest, db: Session = Depends(database.get_db)
         raise HTTPException(status_code=500, detail="Paynow credentials not configured")
 
     payment = paynow.create_payment(req.reference, req.auth_email)
+    total_amount = 0
+    
     for item in req.items:
-        payment.add(item["name"], item["amount"])
+        db_product = db.query(models.Product).filter(models.Product.id == item.product_id).first()
+        if not db_product:
+            raise HTTPException(status_code=404, detail=f"Product with ID {item.product_id} not found")
+        
+        item_total = db_product.price * item.quantity
+        payment.add(f"{db_product.title} x{item.quantity}", item_total)
+        total_amount += item_total
 
     if req.phone:
         response = paynow.send_mobile(payment, req.phone, req.method)
@@ -153,7 +193,7 @@ def initiate_payment(req: PaymentRequest, db: Session = Depends(database.get_db)
         new_order = models.Order(
             username=current_user.username if current_user else None,
             customer_email=req.auth_email,
-            total_amount=sum(item["amount"] for item in req.items),
+            total_amount=total_amount,
             paynow_reference=req.reference,
             paynow_poll_url=response.poll_url
         )
@@ -167,7 +207,7 @@ def initiate_payment(req: PaymentRequest, db: Session = Depends(database.get_db)
             "instructions": getattr(response, "instructions", None)
         }
     else:
-        return {"success": False, "error": "Failed to initiate payment"}
+        return {"success": False, "error": response.error if hasattr(response, 'error') else "Failed to initiate payment"}
 
 @app.get("/api/paynow/status")
 def check_status(poll_url: str, db: Session = Depends(database.get_db)):
