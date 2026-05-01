@@ -3,19 +3,28 @@ import { useState, useEffect } from "react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import ProductCard from "@/components/ProductCard";
+import { FALLBACK_PRODUCTS } from "@/lib/seed-products";
 
 export default function ShopPage() {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [usingFallback, setUsingFallback] = useState(false);
 
   useEffect(() => {
     async function fetchProducts() {
       try {
         const response = await fetch("/api/products");
-        const data = await response.json();
-        setProducts(data);
+        const raw = await response.json().catch(() => null);
+        if (response.ok && Array.isArray(raw)) {
+          setProducts(raw);
+        } else {
+          setProducts(FALLBACK_PRODUCTS as unknown[]);
+          setUsingFallback(true);
+        }
       } catch (err) {
         console.error("Failed to fetch products", err);
+        setProducts(FALLBACK_PRODUCTS as unknown[]);
+        setUsingFallback(true);
       } finally {
         setLoading(false);
       }
@@ -34,6 +43,12 @@ export default function ShopPage() {
             A curated selection of tactile excellence for the modern desk setup. 
             Each piece is selected for its functional purity and aesthetic focus.
           </p>
+          {usingFallback && (
+            <p className="text-xs font-body text-amber-800 bg-amber-50 border border-amber-200 px-4 py-3 rounded-sm max-w-xl">
+              Showing bundled catalog previews (API unreachable). Checkout works after you deploy a
+              fixed API and run <code className="text-[11px]">python api/seed.py</code> against your DB.
+            </p>
+          )}
         </header>
 
         {loading ? (
@@ -48,6 +63,7 @@ export default function ShopPage() {
                 id={product.id.toString()}
                 title={product.title}
                 price={`$${product.price.toFixed(2)}`}
+                priceValue={typeof product.price === "number" ? product.price : parseFloat(product.price)}
                 description={product.description}
                 image={product.image_url}
                 tag={product.tag}

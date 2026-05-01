@@ -32,12 +32,33 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [cart]);
 
   const addToCart = (product: any) => {
-    setCart(prev => {
-      const existing = prev.find(item => item.id === product.id);
+    const numericPrice =
+      typeof product.price === "number"
+        ? product.price
+        : parseFloat(String(product.price).replace(/[$,\s]/g, "")) || 0;
+
+    const idKey = String(product.id);
+
+    setCart((prev) => {
+      const existing = prev.find((item) => item.id === idKey);
       if (existing) {
-        return prev.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
+        return prev.map((item) =>
+          item.id === idKey ? { ...item, quantity: item.quantity + 1 } : item,
+        );
       }
-      return [...prev, { ...product, quantity: 1, price: parseFloat(product.price.replace("$", "")) }];
+      return [
+        ...prev,
+        {
+          id: idKey,
+          title: product.title ?? "",
+          price: numericPrice,
+          image:
+            product.image ??
+            product.image_url ??
+            "",
+          quantity: 1,
+        },
+      ];
     });
   };
 

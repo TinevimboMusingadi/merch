@@ -28,17 +28,32 @@ export default function LoginPage() {
         body: body
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
+
+      function formatDetail(detail: unknown): string {
+        if (typeof detail === "string") return detail;
+        if (Array.isArray(detail)) {
+          return detail
+            .map((item: { msg?: string }) =>
+              typeof item === "object" && item?.msg ? item.msg : String(item))
+            .filter(Boolean)
+            .join(" ");
+        }
+        return "";
+      }
       
       if (response.ok) {
         if (isRegister) {
           setIsRegister(false);
           setError("Account created! Please log in.");
-        } else {
+        } else if (data.access_token) {
           login(data.access_token, username);
+        } else {
+          setError("No access token returned. Check API logs.");
         }
       } else {
-        setError(data.detail || "Authentication failed");
+        const formatted = formatDetail(data.detail);
+        setError(formatted || "Authentication failed");
       }
     } catch (err) {
       setError("An unexpected error occurred.");

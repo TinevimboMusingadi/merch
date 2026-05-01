@@ -29,7 +29,7 @@ class Product(Base):
 class Order(Base):
     __tablename__ = "orders"
     id = Column(Integer, primary_key=True, index=True)
-    username = Column(String, ForeignKey("users.username"))
+    username = Column(String, ForeignKey("users.username"), nullable=True)
     customer_email = Column(String)
     total_amount = Column(Float)
     status = Column(String, default="pending") # pending, paid, failed

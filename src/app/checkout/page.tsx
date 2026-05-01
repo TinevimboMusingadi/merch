@@ -35,19 +35,36 @@ export default function CheckoutPage() {
         headers: headers,
         body: JSON.stringify({
           reference: `Order-${Date.now()}`,
-          auth_email: email,
-          items: cart.map(item => ({ name: item.title, amount: item.price })),
+          auth_email: email || "guest@example.com",
+          items: cart.map((item) => ({
+            product_id: parseInt(item.id, 10),
+            quantity: item.quantity,
+          })),
           phone: phone || null,
-          method: "ecocash"
+          method: "ecocash",
         })
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const detail = data.detail;
+        setError(
+          typeof detail === "string"
+            ? detail
+            : Array.isArray(detail)
+              ? detail.map((d: { msg?: string }) => d.msg ?? "").join(" ")
+              : "Checkout request failed.",
+        );
+        return;
+      }
       if (data.success) {
         if (data.redirect_url) {
           window.location.href = data.redirect_url;
         } else if (data.instructions) {
           setInstructions(data.instructions);
+          clearCart();
+        } else {
+          setInstructions("Order placed successfully.");
           clearCart();
         }
       } else {

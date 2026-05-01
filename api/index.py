@@ -20,21 +20,26 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/token")
+oauth2_scheme_optional = OAuth2PasswordBearer(
+    tokenUrl="api/token", auto_error=False
+)
 
 app = FastAPI()
 
 # Paynow Configuration
 PAYNOW_INTEGRATION_ID = os.getenv("PAYNOW_INTEGRATION_ID")
 PAYNOW_INTEGRATION_KEY = os.getenv("PAYNOW_INTEGRATION_KEY")
-PAYNOW_RESULT_URL = os.getenv("PAYNOW_RESULT_URL")
-PAYNOW_RETURN_URL = os.getenv("PAYNOW_RETURN_URL")
+PAYNOW_RESULT_URL = os.getenv("PAYNOW_RESULT_URL") or ""
+PAYNOW_RETURN_URL = os.getenv("PAYNOW_RETURN_URL") or ""
 
-paynow = Paynow(
-    PAYNOW_INTEGRATION_ID,
-    PAYNOW_INTEGRATION_KEY,
-    PAYNOW_RESULT_URL,
-    PAYNOW_RETURN_URL
-)
+paynow = None
+if PAYNOW_INTEGRATION_ID and PAYNOW_INTEGRATION_KEY:
+    paynow = Paynow(
+        PAYNOW_INTEGRATION_ID,
+        PAYNOW_INTEGRATION_KEY,
+        PAYNOW_RESULT_URL or "https://example.com/paynow/result",
+        PAYNOW_RETURN_URL or "https://example.com/paynow/return",
+    )
 
 # Pydantic Schemas
 class UserCreate(BaseModel):
@@ -68,6 +73,21 @@ class ProductUpdate(BaseModel):
     category: Optional[str] = None
     tag: Optional[str] = None
     is_active: Optional[bool] = None
+
+
+class ProductResponse(BaseModel):
+    id: int
+    title: str
+    description: str
+    price: float
+    image_url: str
+    category: str
+    tag: Optional[str] = None
+    is_active: bool = True
+
+    class Config:
+        from_attributes = True
+
 
 class OrderItem(BaseModel):
     product_id: int
@@ -110,6 +130,24 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     if user is None:
         raise credentials_exception
     return user
+
+
+async def get_current_user_optional(
+    token: Optional[str] = Depends(oauth2_scheme_optional),
+    db: Session = Depends(database.get_db),
+) -> Optional[models.User]:
+    """Same as get_current_user but allows missing Authorization header."""
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: Optional[str] = payload.get("sub")
+        if username is None:
+            return None
+    except JWTError:
+        return None
+    return db.query(models.User).filter(models.User.username == username).first()
+
 
 # Routes
 @app.post("/api/register", response_model=UserResponse)
@@ -167,21 +205,65 @@ def get_my_orders(current_user: models.User = Depends(get_current_user), db: Ses
     return db.query(models.Order).filter(models.Order.username == current_user.username).all()
 
 @app.post("/api/paynow/initiate")
-def initiate_payment(req: PaymentRequest, db: Session = Depends(database.get_db), current_user: Optional[models.User] = Depends(get_current_user)):
-    if not PAYNOW_INTEGRATION_ID or not PAYNOW_INTEGRATION_KEY:
-        raise HTTPException(status_code=500, detail="Paynow credentials not configured")
+def initiate_payment(
+    req: PaymentRequest,
+    db: Session = Depends(database.get_db),
+    current_user: Optional[models.User] = Depends(get_current_user_optional),
+):
+    total_amount = 0.0
+    for item in req.items:
+        db_product = (
+            db.query(models.Product)
+            .filter(models.Product.id == item.product_id)
+            .first()
+        )
+        if not db_product:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Product with ID {item.product_id} not found",
+            )
+        total_amount += db_product.price * item.quantity
+
+    # Demo checkout when Paynow is not configured (e.g. Vercel preview).
+    if not paynow:
+        new_order = models.Order(
+            username=current_user.username if current_user else None,
+            customer_email=req.auth_email,
+            total_amount=total_amount,
+            status="demo_completed",
+            paynow_reference=req.reference,
+            paynow_poll_url=None,
+        )
+        db.add(new_order)
+        db.commit()
+        return {
+            "success": True,
+            "redirect_url": None,
+            "poll_url": None,
+            "instructions": (
+                "Demo mode: Paynow is not configured. Your order total was recorded "
+                f"(${total_amount:.2f}). Add PAYNOW_* env vars for live payments."
+            ),
+            "demo": True,
+        }
 
     payment = paynow.create_payment(req.reference, req.auth_email)
-    total_amount = 0
-    
+
     for item in req.items:
-        db_product = db.query(models.Product).filter(models.Product.id == item.product_id).first()
+        db_product = (
+            db.query(models.Product)
+            .filter(models.Product.id == item.product_id)
+            .first()
+        )
         if not db_product:
-            raise HTTPException(status_code=404, detail=f"Product with ID {item.product_id} not found")
-        
-        item_total = db_product.price * item.quantity
-        payment.add(f"{db_product.title} x{item.quantity}", item_total)
-        total_amount += item_total
+            raise HTTPException(
+                status_code=404,
+                detail=f"Product with ID {item.product_id} not found",
+            )
+        payment.add(
+            f"{db_product.title} x{item.quantity}",
+            db_product.price * item.quantity,
+        )
 
     if req.phone:
         response = paynow.send_mobile(payment, req.phone, req.method)
@@ -189,37 +271,49 @@ def initiate_payment(req: PaymentRequest, db: Session = Depends(database.get_db)
         response = paynow.send(payment)
 
     if response.success:
-        # Save order to DB
         new_order = models.Order(
             username=current_user.username if current_user else None,
             customer_email=req.auth_email,
             total_amount=total_amount,
             paynow_reference=req.reference,
-            paynow_poll_url=response.poll_url
+            paynow_poll_url=response.poll_url,
         )
         db.add(new_order)
         db.commit()
-        
+
         return {
             "success": True,
             "redirect_url": response.redirect_url if not req.phone else None,
             "poll_url": response.poll_url,
-            "instructions": getattr(response, "instructions", None)
+            "instructions": getattr(response, "instructions", None),
         }
-    else:
-        return {"success": False, "error": response.error if hasattr(response, 'error') else "Failed to initiate payment"}
+    return {
+        "success": False,
+        "error": response.error if hasattr(response, "error") else "Failed"
+    }
 
 @app.get("/api/paynow/status")
 def check_status(poll_url: str, db: Session = Depends(database.get_db)):
-    status = paynow.check_transaction_status(poll_url)
-    if status.paid:
-        order = db.query(models.Order).filter(models.Order.paynow_poll_url == poll_url).first()
+    if not paynow:
+        return {
+            "status": "unconfigured",
+            "paid": False,
+            "reference": None,
+            "amount": None,
+        }
+    txn = paynow.check_transaction_status(poll_url)
+    if txn.paid:
+        order = (
+            db.query(models.Order)
+            .filter(models.Order.paynow_poll_url == poll_url)
+            .first()
+        )
         if order:
             order.status = "paid"
             db.commit()
     return {
-        "status": status.status,
-        "paid": status.paid,
-        "reference": status.reference,
-        "amount": status.amount
+        "status": txn.status,
+        "paid": txn.paid,
+        "reference": txn.reference,
+        "amount": txn.amount,
     }

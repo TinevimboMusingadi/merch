@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "seed:db": "python api/seed.py"
   },
   "dependencies": {
     "@vercel/blob": "^2.3.3",
