@@ -6,6 +6,6 @@ pydantic
 sqlalchemy
 psycopg2-binary
 requests
-passlib[bcrypt]
+bcrypt>=4.2.0
 python-jose[cryptography]
 python-multipart

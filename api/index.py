@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
-from passlib.context import CryptContext
+import bcrypt
 from jose import JWTError, jwt
 
 from . import models, database
@@ -18,7 +18,8 @@ load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-for-jwt")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+_BCRYPT_PASSWORD_MAX_BYTES = 72
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/token")
 oauth2_scheme_optional = OAuth2PasswordBearer(
     tokenUrl="api/token", auto_error=False
@@ -101,11 +102,34 @@ class PaymentRequest(BaseModel):
     method: str = "ecocash"
 
 # Helpers
-def get_password_hash(password):
-    return pwd_context.hash(password)
+def _password_utf8_byte_length(password: str) -> int:
+    return len(password.encode("utf-8"))
 
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+
+def get_password_hash(password: str) -> str:
+    """Hash password with bcrypt (avoids passlib vs bcrypt>=4.1 incompatibility)."""
+    if _password_utf8_byte_length(password) > _BCRYPT_PASSWORD_MAX_BYTES:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Password is too long: bcrypt accepts at most 72 UTF-8 bytes. "
+                "Use a shorter password."
+            ),
+        )
+    hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=12))
+    return hashed.decode("utf-8")
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify bcrypt hash (compatible with hashes created by passlib)."""
+    try:
+        return bcrypt.checkpw(
+            plain_password.encode("utf-8"),
+            hashed_password.encode("utf-8"),
+        )
+    except (ValueError, TypeError):
+        return False
+
 
 def create_access_token(data: dict):
     to_encode = data.copy()
