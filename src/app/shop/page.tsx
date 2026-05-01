@@ -57,18 +57,24 @@ export default function ShopPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-gutter gap-y-20">
-            {products.map((product) => (
-              <ProductCard 
-                key={product.id}
-                id={product.id.toString()}
-                title={product.title}
-                price={`$${product.price.toFixed(2)}`}
-                priceValue={typeof product.price === "number" ? product.price : parseFloat(product.price)}
-                description={product.description}
-                image={product.image_url}
-                tag={product.tag}
-              />
-            ))}
+            {products.map((product, index) => {
+              const priceNum = Number(product?.price ?? 0);
+              const safePrice = Number.isFinite(priceNum) ? priceNum : 0;
+              return (
+                <ProductCard
+                  key={String(product?.id ?? `item-${index}`)}
+                  id={String(product?.id ?? index)}
+                  title={String(product?.title ?? "Product")}
+                  price={`$${safePrice.toFixed(2)}`}
+                  priceValue={safePrice}
+                  description={String(product?.description ?? "")}
+                  image={String(
+                    product?.image_url ?? product?.imageUrl ?? "",
+                  )}
+                  tag={product?.tag ? String(product.tag) : undefined}
+                />
+              );
+            })}
           </div>
         )}
       </main>

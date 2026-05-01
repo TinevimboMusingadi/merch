@@ -41,35 +41,49 @@ export default function ProductCard({
     });
   }
 
+  const trimmedSrc = image?.trim();
+
   return (
-    <Link href={`/products/${id}`} className="group cursor-pointer block">
-      <div className="relative">
-        <div className="aspect-[4/5] bg-surface mb-6 overflow-hidden relative rounded-sm">
-          <Image 
-            src={image} 
-            alt={title}
-            fill
-            className="object-cover group-hover:scale-105 transition-transform duration-700"
-          />
+    <Link
+      href={`/products/${id}`}
+      className="group block cursor-pointer text-on-surface no-underline hover:text-on-surface"
+    >
+      <article className="relative">
+        <div className="relative mb-6 aspect-[4/5] overflow-hidden rounded-sm bg-surface">
+          {trimmedSrc ? (
+            <Image
+              src={trimmedSrc}
+              alt={title || "Product"}
+              fill
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 400px"
+              className="z-0 object-cover transition-transform duration-700 group-hover:scale-105"
+            />
+          ) : (
+            <div className="absolute inset-0 z-0 flex items-center justify-center bg-black/5 font-body text-sm text-secondary">
+              No image
+            </div>
+          )}
           {tag && (
-            <span className="absolute top-4 left-4 text-label-caps bg-white px-3 py-1 text-black">
+            <span className="absolute left-4 top-4 z-10 text-label-caps bg-white px-3 py-1 text-black shadow-sm">
               {tag}
             </span>
           )}
           <button
             type="button"
             onClick={handleQuickAdd}
-            className="absolute bottom-4 right-4 text-label-caps bg-black text-white px-4 py-2 opacity-90 hover:opacity-100 shadow-sm uppercase tracking-wide"
+            className="absolute bottom-4 right-4 z-10 text-label-caps uppercase tracking-wide shadow-sm px-4 py-2 bg-black text-white hover:opacity-100 opacity-90"
           >
             Add to cart
           </button>
         </div>
-        <div className="space-y-1">
-          <h3 className="font-headline text-xl">{title}</h3>
-          <p className="font-body text-secondary line-clamp-2">{description}</p>
-          <p className="font-body text-primary-container font-semibold">{price}</p>
+        <div className="space-y-1 border-t border-transparent pt-2">
+          <h3 className="font-headline text-xl leading-snug text-black">{title}</h3>
+          <p className="font-body line-clamp-2 text-sm leading-relaxed text-secondary">
+            {description}
+          </p>
+          <p className="font-body font-semibold text-primary-container">{price}</p>
         </div>
-      </div>
+      </article>
     </Link>
   );
 }
